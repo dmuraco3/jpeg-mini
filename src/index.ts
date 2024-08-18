@@ -1,7 +1,12 @@
+// Code from https://github.com/jpeg-js/jpeg-js
+
 function btoa(buf: number[]) {
     return Buffer.from(buf).toString("base64");
 }
 
+interface ImplForEach {
+    forEach(callbackfn: (value: number, index: number, array: this) => void, thisArg?: any): void;
+}
 class JPEGEncoder {
     bitcode: any[];
     category: any[];
@@ -268,13 +273,21 @@ class JPEGEncoder {
         this.byteout.push(value);
     }
 
+    writeBytes<T extends ImplForEach>(values: T) {
+        values.forEach(x => this.writeByte(x));
+    }
+
     writeWord(value: number) {
         this.writeByte((value >> 8) & 0xFF);
         this.writeByte((value) & 0xFF);
     }
 
+    writeWords<T extends ImplForEach>(values: T) {
+        values.forEach(x => this.writeWord(x));
+    }
+
     writeHeader() {
-        const header_jfif = new Uint8Array([
+        this.writeBytes(new Uint8Array([
             0xFF, 0xD8,
             0xFF, 0xE0,
             0   , 16,
@@ -283,36 +296,25 @@ class JPEGEncoder {
             0,
             0,1,0,1,
             0,0 
-        ]);
-        header_jfif.forEach((x) => this.writeByte(x))
+        ]));
     }
 
     // DCT & quantization core
     fDCTQuant(data: number[], fdtbl: number[]) {
-        var d0, d1, d2, d3, d4, d5, d6, d7;
+        let d = (new Array(8)).fill(0);
         /* Pass 1: process rows. */
         var dataOff = 0;
-        var i;
-        var I8 = 8;
-        var I64 = 64;
-        for (i = 0; i < I8; ++i) {
-            d0 = data[dataOff];
-            d1 = data[dataOff + 1];
-            d2 = data[dataOff + 2];
-            d3 = data[dataOff + 3];
-            d4 = data[dataOff + 4];
-            d5 = data[dataOff + 5];
-            d6 = data[dataOff + 6];
-            d7 = data[dataOff + 7];
+        for (let i = 0; i < 8; ++i) {
+            d.forEach((_,ii) => d[ii] = data[dataOff+ii]);
 
-            var tmp0 = d0 + d7;
-            var tmp7 = d0 - d7;
-            var tmp1 = d1 + d6;
-            var tmp6 = d1 - d6;
-            var tmp2 = d2 + d5;
-            var tmp5 = d2 - d5;
-            var tmp3 = d3 + d4;
-            var tmp4 = d3 - d4;
+            var tmp0 = d[0] + d[7];
+            var tmp1 = d[1] + d[6];
+            var tmp2 = d[2] + d[5];
+            var tmp3 = d[3] + d[4];
+            var tmp4 = d[3] - d[4];
+            var tmp5 = d[2] - d[5];
+            var tmp6 = d[1] - d[6];
+            var tmp7 = d[0] - d[7];
 
             /* Even part */
             var tmp10 = tmp0 + tmp3;	/* phase 2 */
@@ -351,30 +353,31 @@ class JPEGEncoder {
 
         /* Pass 2: process columns. */
         dataOff = 0;
-        for (i = 0; i < I8; ++i) {
-            d0 = data[dataOff];
-            d1 = data[dataOff + 8];
-            d2 = data[dataOff + 16];
-            d3 = data[dataOff + 24];
-            d4 = data[dataOff + 32];
-            d5 = data[dataOff + 40];
-            d6 = data[dataOff + 48];
-            d7 = data[dataOff + 56];
+        for (let i = 0; i < 8; ++i) {
+            d.forEach((_,ii) => d[ii] = data[dataOff+ii*8]);
 
-            var tmp0p2 = d0 + d7;
-            var tmp7p2 = d0 - d7;
-            var tmp1p2 = d1 + d6;
-            var tmp6p2 = d1 - d6;
-            var tmp2p2 = d2 + d5;
-            var tmp5p2 = d2 - d5;
-            var tmp3p2 = d3 + d4;
-            var tmp4p2 = d3 - d4;
+            let tmp_p2 = new Array(8);
+            for(let ii=0;ii<4;ii++){
+                tmp_p2[ii]=d[ii]+d[7-ii];
+                tmp_p2[7-ii]=d[ii]-d[7-ii];
+            }
+            // var tmp0p2 = d[0] + d[7];
+            // var tmp7p2 = d[0] - d[7];
+
+            // var tmp1p2 = d[1] + d[6];
+            // var tmp6p2 = d[1] - d[6];
+            
+            // var tmp2p2 = d[2] + d[5];
+            // var tmp5p2 = d[2] - d[5];
+            
+            // var tmp3p2 = d[3] + d[4];
+            // var tmp4p2 = d[3] - d[4];
 
             /* Even part */
-            var tmp10p2 = tmp0p2 + tmp3p2;	/* phase 2 */
-            var tmp13p2 = tmp0p2 - tmp3p2;
-            var tmp11p2 = tmp1p2 + tmp2p2;
-            var tmp12p2 = tmp1p2 - tmp2p2;
+            var tmp10p2 = tmp_p2[0] + tmp_p2[3];	/* phase 2 */
+            var tmp13p2 = tmp_p2[0] - tmp_p2[3];
+            var tmp11p2 = tmp_p2[1] + tmp_p2[2];
+            var tmp12p2 = tmp_p2[1] - tmp_p2[2];
 
             data[dataOff] = tmp10p2 + tmp11p2; /* phase 3 */
             data[dataOff + 32] = tmp10p2 - tmp11p2;
@@ -384,9 +387,9 @@ class JPEGEncoder {
             data[dataOff + 48] = tmp13p2 - z1p2;
 
             /* Odd part */
-            tmp10p2 = tmp4p2 + tmp5p2; /* phase 2 */
-            tmp11p2 = tmp5p2 + tmp6p2;
-            tmp12p2 = tmp6p2 + tmp7p2;
+            tmp10p2 = tmp_p2[4] + tmp_p2[5]; /* phase 2 */
+            tmp11p2 = tmp_p2[5] + tmp_p2[6];
+            tmp12p2 = tmp_p2[6] + tmp_p2[7];
 
             /* The rotator is modified from fig 4-8 to avoid extra negations. */
             var z5p2 = (tmp10p2 - tmp12p2) * 0.382683433; /* c6 */
@@ -394,92 +397,46 @@ class JPEGEncoder {
             var z4p2 = 1.306562965 * tmp12p2 + z5p2; /* c2+c6 */
             var z3p2 = tmp11p2 * 0.707106781; /* c4 */
 
-            var z11p2 = tmp7p2 + z3p2;	/* phase 5 */
-            var z13p2 = tmp7p2 - z3p2;
+            var z11p2 = tmp_p2[7] + z3p2;	/* phase 5 */
+            var z13p2 = tmp_p2[7] - z3p2;
 
-            data[dataOff + 40] = z13p2 + z2p2; /* phase 6 */
-            data[dataOff + 24] = z13p2 - z2p2;
             data[dataOff + 8] = z11p2 + z4p2;
+            data[dataOff + 24] = z13p2 - z2p2;
+            data[dataOff + 40] = z13p2 + z2p2; /* phase 6 */
             data[dataOff + 56] = z11p2 - z4p2;
 
             dataOff++; /* advance pointer to next column */
         }
 
         // Quantize/descale the coefficients
-        var fDCTQuant;
-        for (i = 0; i < I64; ++i) {
+        for (let i = 0; i < 64; ++i) {
             // Apply the quantization and scaling factor & Round to nearest integer
-            fDCTQuant = data[i] * fdtbl[i];
+            const fDCTQuant = data[i] * fdtbl[i];
             this.outputfDCTQuant[i] = (fDCTQuant > 0.0) ? ((fDCTQuant + 0.5) | 0) : ((fDCTQuant - 0.5) | 0);
-            //outputfDCTQuant[i] = fround(fDCTQuant);
-
         }
         return this.outputfDCTQuant;
     }
-    // writeAPP1(exifBuffer) {
-    //     if (!exifBuffer) return;
-
-    //     this.writeWord(0xFFE1); // APP1 marker
-
-    //     if (exifBuffer[0] === 0x45 &&
-    //         exifBuffer[1] === 0x78 &&
-    //         exifBuffer[2] === 0x69 &&
-    //         exifBuffer[3] === 0x66) {
-    //         // Buffer already starts with EXIF, just use it directly
-    //         this.writeWord(exifBuffer.length + 2); // length is buffer + length itself!
-    //     } else {
-    //         // Buffer doesn't start with EXIF, write it for them
-    //         this.writeWord(exifBuffer.length + 5 + 2); // length is buffer + EXIF\0 + length itself!
-    //         this.writeByte(0x45); // E
-    //         this.writeByte(0x78); // X
-    //         this.writeByte(0x69); // I
-    //         this.writeByte(0x66); // F
-    //         this.writeByte(0); // = "EXIF",'\0'
-    //     }
-
-    //     for (var i = 0; i < exifBuffer.length; i++) {
-    //         this.writeByte(exifBuffer[i]);
-    //     }
-    // }
 
     /**
      * Write Image Info 
      */
     writeSOF0(width: number, height: number) {
-        this.writeWord(0xFFC0); // marker
-        this.writeWord(17);   // length, truecolor YUV JPG
+        this.writeWords([0xFFC0, 17]);
         this.writeByte(8);    // precision
-        
-        this.writeWord(height);
-        this.writeWord(width);
-
+        this.writeWords([height,width]);
         this.writeByte(3);    // nrofcomponents
-
-        // WRITE Y COMPONENT
-        this.writeByte(1);    // IdY
-        this.writeByte(0x11); // HVY
-        this.writeByte(0);    // QTY
-        
-        // WRITE Cb COMPONENT
-        this.writeByte(2);    // IdU
-        this.writeByte(0x11); // HVU
-        this.writeByte(1);    // QTU
-        
-        // WRITE Cr COMPONENT
-        this.writeByte(3);    // IdV
-        this.writeByte(0x11); // HVV
-        this.writeByte(1);    // QTV
+        // write Y,Cb,Cr components
+        for(let id=1;id<=3;id++) this.writeBytes([id,0x11,id==1?0:1]);
     }
 
     /**
      * Writes quantization tables
      */
     writeDQT() {
-        this.writeWord(0xFFDB); // marker
-        this.writeWord(132);	   // length
+        this.writeWords([0xFFDB,132]);
         this.writeByte(0);
+        this.writeBytes(this.YTable.slice(0,64));
         this.YTable.slice(0,64).forEach((y) => this.writeByte(y));
-        
         this.writeByte(1);
         this.UVTable.slice(0,64).forEach((u) => this.writeByte(u));
     }
@@ -488,8 +445,7 @@ class JPEGEncoder {
      * Write Diffie-Hellman Tables
      */
     writeDHT() {
-        this.writeWord(0xFFC4); // marker
-        this.writeWord(2+208+208); // length
+        this.writeWords([0xFFC4,2+208+208]);
 
         // store luminance's DC+AC Huffman table definitions
         this.writeByte(0); // HTYDCinfo
@@ -509,32 +465,10 @@ class JPEGEncoder {
         this.std_ac_chrominance_values.forEach((x) => this.writeByte(x));
     }
 
-    // writeCOM(comments) {
-    //     if (typeof comments === "undefined" || comments.constructor !== Array) return;
-    //     comments.forEach(e => {
-    //         if (typeof e !== "string") return;
-    //         this.writeWord(0xFFFE); // marker
-    //         var l = e.length;
-    //         this.writeWord(l + 2); // length itself as well
-    //         var i;
-    //         for (i = 0; i < l; i++)
-    //             this.writeByte(e.charCodeAt(i));
-    //     });
-    // }
 
     writeSOS() {
-        this.writeWord(0xFFDA); // marker
-        this.writeWord(12); // length
-        this.writeByte(3); // nrofcomponents
-        this.writeByte(1); // IdY
-        this.writeByte(0); // HTY
-        this.writeByte(2); // IdU
-        this.writeByte(0x11); // HTU
-        this.writeByte(3); // IdV
-        this.writeByte(0x11); // HTV
-        this.writeByte(0); // Ss
-        this.writeByte(0x3f); // Se
-        this.writeByte(0); // Bf
+        this.writeWords([0xFFDA,12]);
+        this.writeBytes([3,1,0,2,0x11,3,0x11,0,0x3F,0])
     }
 
     processDU(CDU: number[], fdtbl: number[], DC: number, HTDC: number[][], HTAC: number[][]) {
