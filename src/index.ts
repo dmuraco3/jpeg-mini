@@ -7,6 +7,11 @@ function btoa(buf: number[]) {
 interface ImplForEach {
     forEach(callbackfn: (value: number, index: number, array: this) => void, thisArg?: any): void;
 }
+
+function clamp(val: number, min: number, max: number) {
+    return Math.min(Math.max(val, min), max);
+}
+
 class JPEGEncoder {
     bitcode: any[];
     category: any[];
@@ -121,7 +126,7 @@ class JPEGEncoder {
         this.VDU = new Array(64);
         this.clt = new Array(256);
         this.RGB_YUV_TABLE = new Array(2048);
-        
+
         this.initCharLookupTable();
         this.initHuffmanTbl();
         this.initCategoryNumber();
@@ -131,7 +136,7 @@ class JPEGEncoder {
     }
 
     initQuantTables(sf: number) {
-        var YQT = [
+        const YQT = [
             16, 11, 10, 16, 24, 40, 51, 61,
             12, 12, 14, 19, 26, 58, 60, 55,
             14, 13, 16, 24, 40, 57, 69, 56,
@@ -142,16 +147,10 @@ class JPEGEncoder {
             72, 92, 95, 98, 112, 100, 103, 99
         ];
 
-        for (var i = 0; i < 64; i++) {
-            var t = Math.floor((YQT[i] * sf + 50) / 100);
-            if (t < 1) {
-                t = 1;
-            } else if (t > 255) {
-                t = 255;
-            }
-            this.YTable[this.ZigZag[i]] = t;
-        }
-        var UVQT = [
+        for (let i = 0; i < 64; i++)
+            this.YTable[this.ZigZag[i]] = clamp(Math.floor((YQT[i] * sf + 50) / 100), 1, 255);
+
+        const UVQT = [
             17, 18, 24, 47, 99, 99, 99, 99,
             18, 21, 26, 66, 99, 99, 99, 99,
             24, 26, 56, 99, 99, 99, 99, 99,
@@ -161,22 +160,17 @@ class JPEGEncoder {
             99, 99, 99, 99, 99, 99, 99, 99,
             99, 99, 99, 99, 99, 99, 99, 99
         ];
-        for (var j = 0; j < 64; j++) {
-            var u = Math.floor((UVQT[j] * sf + 50) / 100);
-            if (u < 1) {
-                u = 1;
-            } else if (u > 255) {
-                u = 255;
-            }
-            this.UVTable[this.ZigZag[j]] = u;
-        }
-        var aasf = [
+
+        for (let i = 0; i < 64; i++)
+            this.UVTable[this.ZigZag[i]] = clamp(Math.floor((UVQT[i] * sf + 50) / 100), 1, 255);
+
+        const aasf = [
             1.0, 1.387039845, 1.306562965, 1.175875602,
             1.0, 0.785694958, 0.541196100, 0.275899379
         ];
-        var k = 0;
-        for (var row = 0; row < 8; row++) {
-            for (var col = 0; col < 8; col++) {
+        let k = 0;
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
                 this.fdtbl_Y[k] = (1.0 / (this.YTable[this.ZigZag[k]] * aasf[row] * aasf[col] * 8.0));
                 this.fdtbl_UV[k] = (1.0 / (this.UVTable[this.ZigZag[k]] * aasf[row] * aasf[col] * 8.0));
                 k++;
@@ -245,7 +239,7 @@ class JPEGEncoder {
     }
 
     // IO functions
-     writeBits(bs: number[]) {
+    writeBits(bs: number[]) {
         var value = bs[0];
         var posval = bs[1] - 1;
         while (posval >= 0) {
@@ -269,7 +263,6 @@ class JPEGEncoder {
     }
 
     writeByte(value: number) {
-        // this.byteout.push(this.clt[value]); // write char directly instead of converting later
         this.byteout.push(value);
     }
 
@@ -287,16 +280,7 @@ class JPEGEncoder {
     }
 
     writeHeader() {
-        this.writeBytes(new Uint8Array([
-            0xFF, 0xD8,
-            0xFF, 0xE0,
-            0   , 16,
-            0x4A, 0x46, 0x49, 0x46, 0, // JFIF identifier, zero-terminated
-            1,1,
-            0,
-            0,1,0,1,
-            0,0 
-        ]));
+        this.writeBytes(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 16, 0x4A, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]));
     }
 
     // DCT & quantization core
@@ -305,7 +289,7 @@ class JPEGEncoder {
         /* Pass 1: process rows. */
         var dataOff = 0;
         for (let i = 0; i < 8; ++i) {
-            d.forEach((_,ii) => d[ii] = data[dataOff+ii]);
+            d.forEach((_, ii) => d[ii] = data[dataOff + ii]);
 
             var tmp0 = d[0] + d[7];
             var tmp1 = d[1] + d[6];
@@ -354,22 +338,22 @@ class JPEGEncoder {
         /* Pass 2: process columns. */
         dataOff = 0;
         for (let i = 0; i < 8; ++i) {
-            d.forEach((_,ii) => d[ii] = data[dataOff+ii*8]);
+            d.forEach((_, ii) => d[ii] = data[dataOff + ii * 8]);
 
             let tmp_p2 = new Array(8);
-            for(let ii=0;ii<4;ii++){
-                tmp_p2[ii]=d[ii]+d[7-ii];
-                tmp_p2[7-ii]=d[ii]-d[7-ii];
+            for (let ii = 0; ii < 4; ii++) {
+                tmp_p2[ii] = d[ii] + d[7 - ii];
+                tmp_p2[7 - ii] = d[ii] - d[7 - ii];
             }
             // var tmp0p2 = d[0] + d[7];
             // var tmp7p2 = d[0] - d[7];
 
             // var tmp1p2 = d[1] + d[6];
             // var tmp6p2 = d[1] - d[6];
-            
+
             // var tmp2p2 = d[2] + d[5];
             // var tmp5p2 = d[2] - d[5];
-            
+
             // var tmp3p2 = d[3] + d[4];
             // var tmp4p2 = d[3] - d[4];
 
@@ -423,34 +407,34 @@ class JPEGEncoder {
     writeSOF0(width: number, height: number) {
         this.writeWords([0xFFC0, 17]);
         this.writeByte(8);    // precision
-        this.writeWords([height,width]);
+        this.writeWords([height, width]);
         this.writeByte(3);    // nrofcomponents
         // write Y,Cb,Cr components
-        for(let id=1;id<=3;id++) this.writeBytes([id,0x11,id==1?0:1]);
+        for (let id = 1; id <= 3; id++) this.writeBytes([id, 0x11, id == 1 ? 0 : 1]);
     }
 
     /**
      * Writes quantization tables
      */
     writeDQT() {
-        this.writeWords([0xFFDB,132]);
+        this.writeWords([0xFFDB, 132]);
         this.writeByte(0);
-        this.writeBytes(this.YTable.slice(0,64));
-        this.YTable.slice(0,64).forEach((y) => this.writeByte(y));
+        this.writeBytes(this.YTable.slice(0, 64));
+        this.YTable.slice(0, 64).forEach((y) => this.writeByte(y));
         this.writeByte(1);
-        this.UVTable.slice(0,64).forEach((u) => this.writeByte(u));
+        this.UVTable.slice(0, 64).forEach((u) => this.writeByte(u));
     }
 
     /**
      * Write Diffie-Hellman Tables
      */
     writeDHT() {
-        this.writeWords([0xFFC4,2+208+208]);
+        this.writeWords([0xFFC4, 2 + 208 + 208]);
 
         // store luminance's DC+AC Huffman table definitions
         this.writeByte(0); // HTYDCinfo
-        this.std_dc_luminance_nrcodes.slice(1).forEach((x)=>this.writeByte(x));
-        this.std_dc_luminance_values.forEach((x)=>this.writeByte(x));
+        this.std_dc_luminance_nrcodes.slice(1).forEach((x) => this.writeByte(x));
+        this.std_dc_luminance_values.forEach((x) => this.writeByte(x));
 
         this.writeByte(0x10); // HTYACinfo
         this.std_ac_luminance_nrcodes.slice(1).forEach((x) => this.writeByte(x));
@@ -467,8 +451,8 @@ class JPEGEncoder {
 
 
     writeSOS() {
-        this.writeWords([0xFFDA,12]);
-        this.writeBytes([3,1,0,2,0x11,3,0x11,0,0x3F,0])
+        this.writeWords([0xFFDA, 12]);
+        this.writeBytes([3, 1, 0, 2, 0x11, 3, 0x11, 0, 0x3F, 0])
     }
 
     processDU(CDU: number[], fdtbl: number[], DC: number, HTDC: number[][], HTAC: number[][]) {
@@ -531,7 +515,7 @@ class JPEGEncoder {
         }
     }
 
-    encode(image: {data: Buffer, width: number, height: number}, quality: number) // image data object
+    encode(image: { data: Buffer, width: number, height: number }, quality: number) // image data object
     {
         if (quality) this.setQuality(quality);
 
@@ -647,14 +631,13 @@ class JPEGEncoder {
             sf = Math.floor(200 - quality * 2);
         }
 
-        this.initQuantTables(sf);
         this.currentQuality = quality;
-        //console.log('Quality set to: '+quality +'%');
+        this.initQuantTables(sf);
     }
 };
 
 
-function encode(imgData: {data: Buffer, width: number, height: number}, qu: number) {
+function encode(imgData: { data: Buffer, width: number, height: number }, qu: number) {
     if (typeof qu === 'undefined') qu = 50;
     var encoder = new JPEGEncoder(qu);
     var data = encoder.encode(imgData, qu);
